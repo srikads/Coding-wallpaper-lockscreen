@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CodeWall</string>
+    <string name="wallpaper_description">Your day as live, syntax-highlighted JSON: time with seconds, weather, tasks and more.</string>
+    <string name="media_listener_label">CodeWall now playing</string>
+</resources>
