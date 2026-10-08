@@ -129,3 +129,36 @@ class TasksTest {
         assertTrue(Quotes.pick(QuoteKind.MIXED, 0L, 30).isNotEmpty())
     }
 }
+
+class LayoutTest {
+    private val values = mapOf(
+        FieldId.TIME to JString("t"),
+        FieldId.QUOTE to JString("fix: it was DNS"),
+        FieldId.WEATHER to obj("temp" to JNumber(10), "unit" to JString("C")),
+    )
+
+    @Test
+    fun quoteMovesToFooterOnLockOnly() {
+        val cfg = WallConfig()
+        val locked = DocumentBuilder.render(cfg, values, locked = true)
+        assertEquals(listOf("// fix: it was DNS"), locked.footer.map { it.text })
+        assertFalse(locked.lines.any { it.text.contains("DNS") })
+        val home = DocumentBuilder.render(cfg, values, locked = false)
+        assertTrue(home.footer.isEmpty())
+        assertTrue(home.lines.any { it.text.contains("DNS") })
+        val inline = DocumentBuilder.render(cfg.copy(quotePlacement = QuotePlacement.INLINE), values, locked = true)
+        assertTrue(inline.footer.isEmpty())
+    }
+
+    @Test
+    fun compactObjectsRenderOnOneLine() {
+        val lines = DocumentBuilder.lines(WallConfig(compactObjects = true), values, locked = false).map { it.text }
+        assertTrue(lines.contains("  \"weather\": { \"temp\": 10, \"unit\": \"C\" },"))
+    }
+
+    @Test
+    fun layoutRoundTrip() {
+        val c = WallConfig(lockTop = 0.33f, footerTop = 0.8f, quotePlacement = QuotePlacement.FOOTER_ALWAYS, compactObjects = true)
+        assertEquals(c, WallConfig.fromJson(c.toJson().toString()))
+    }
+}

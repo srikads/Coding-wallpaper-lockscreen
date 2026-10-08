@@ -101,10 +101,11 @@ class WallController(context: Context, private val onDataChanged: () -> Unit) {
             putAll(clock)
             put(FieldId.WEATHER, weatherOrHint())
         }
-        val lines = DocumentBuilder.lines(config, values, isLocked())
+        val locked = isLocked()
+        val rendered = DocumentBuilder.render(config, values, locked)
         val time = (clock[FieldId.TIME] as? JString)?.value
-        renderer.submit(lines, nowMs, ignoreChangesContaining = if (config.useTemplate) time else null)
-        val animating = renderer.draw(canvas, width, height, nowMs)
+        renderer.submit(rendered.lines, rendered.footer, nowMs, ignoreChangesContaining = if (config.useTemplate) time else null)
+        val animating = renderer.draw(canvas, width, height, nowMs, locked)
         return nextDelay(nowMs, animating)
     }
 

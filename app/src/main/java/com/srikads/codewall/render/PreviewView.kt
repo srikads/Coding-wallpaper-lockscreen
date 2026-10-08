@@ -16,6 +16,7 @@ class PreviewView(context: Context) : View(context) {
 
     init {
         controller.isLocked = { previewLocked }
+        controller.renderer.showGuides = true
     }
 
     fun replayTyping() {

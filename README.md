@@ -46,6 +46,7 @@ The seconds tick live, the text types itself in when the screen turns on, and a 
 - **Fields**: turn each one on or off, reorder them, rename the JSON keys, and choose whether it shows on the lock screen. Tasks, events, network and now playing are hidden on the lock screen by default.
 - **Themes**: Dracula, Monokai, One Dark, Matrix, AMOLED black.
 - **Font**: size, bold, or import your own `.ttf`/`.otf` (JetBrains Mono, Fira Code, …).
+- **Screen areas**: separate code areas for the home and lock screen. The lock-screen default (30%–70% of the height) sits between the Pixel clock and the fingerprint icon. The quote can move to a footer slot below the fingerprint (81%–91%), either on the lock screen only or everywhere. "Compact objects" puts nested objects on one line so more fits.
 - **Layout**: vertical position, side padding, left or centered alignment, line numbers, and the header comment. Text wraps and shrinks to fit the screen.
 - **Animations**: typing effect, blinking cursor, highlight on change, parallax.
 - **Template mode**: write any code shape you like with `{{placeholders}}`:

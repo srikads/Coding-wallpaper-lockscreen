@@ -2,6 +2,7 @@ package com.srikads.codewall.render
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Typeface
 import com.srikads.codewall.core.Align
@@ -33,12 +34,20 @@ class WallRenderer(context: Context) {
     private var baseTypeface: Typeface = Typeface.MONOSPACE
 
     private var lines: List<Line> = emptyList()
+    private var footer: List<Line> = emptyList()
     private val lastText = HashMap<String, String>()
     private val changedAt = HashMap<String, Long>()
     private var typingStart = -1L
 
     /** 0..1 horizontal home-screen scroll position, used for parallax. */
     var parallaxOffset = 0.5f
+
+    /** Outlines the code and footer areas (in-app preview only). */
+    var showGuides = false
+    private val guidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        pathEffect = DashPathEffect(floatArrayOf(12f, 10f), 0f)
+    }
 
     fun setConfig(newConfig: WallConfig) {
         config = newConfig
@@ -52,7 +61,8 @@ class WallRenderer(context: Context) {
     }
 
     /** Replaces the content. Lines whose text changed get a brief highlight. */
-    fun submit(newLines: List<Line>, nowMs: Long, ignoreChangesContaining: String? = null) {
+    fun submit(newLines: List<Line>, newFooter: List<Line>, nowMs: Long, ignoreChangesContaining: String? = null) {
+        footer = newFooter
         val first = lastText.isEmpty()
         val seen = HashSet<String>()
         for (l in newLines) {
@@ -77,15 +87,27 @@ class WallRenderer(context: Context) {
     private data class Row(val spans: List<Span>, val number: Int?, val lineId: String)
 
     /** Draws a frame. Returns true while an animation is running and frames should keep coming quickly. */
-    fun draw(canvas: Canvas, width: Int, height: Int, nowMs: Long): Boolean {
+    fun draw(canvas: Canvas, width: Int, height: Int, nowMs: Long, locked: Boolean): Boolean {
         canvas.drawColor(theme.background)
-        if (lines.isEmpty() || width <= 0 || height <= 0) return false
+        if (width <= 0 || height <= 0) return false
+
+        val (areaTopF, areaBottomF) = if (locked) config.lockTop to config.lockBottom else config.homeTop to config.homeBottom
+        val areaTop = height * areaTopF.coerceIn(0f, 1f)
+        val areaBottom = max(areaTop + height * 0.05f, height * areaBottomF.coerceIn(0f, 1f))
+        if (showGuides) {
+            guidePaint.color = (theme.comment and 0xFFFFFF) or (0x99 shl 24)
+            guidePaint.strokeWidth = density
+            canvas.drawRect(density * 4, areaTop, width - density * 4, areaBottom, guidePaint)
+            if (footer.isNotEmpty()) canvas.drawRect(density * 4, height * config.footerTop, width - density * 4, height * config.footerBottom, guidePaint)
+        }
+        drawFooter(canvas, width, height)
+        if (lines.isEmpty()) return false
 
         val pad = config.horizontalPaddingDp * density
         val parallaxRange = if (config.parallax) 18 * density else 0f
         val shiftX = (0.5f - parallaxOffset) * 2 * parallaxRange
 
-        // Fit: shrink the font until everything fits in ~88% of the height.
+        // Fit: shrink the font until everything fits in the code area.
         var size = config.fontSizeSp * scaledDensity
         var rows: List<Row> = emptyList()
         var charW = 0f
@@ -97,9 +119,9 @@ class WallRenderer(context: Context) {
             lineH = paint.fontSpacing * 1.12f
             gutter = if (config.lineNumbers) (lines.size.toString().length + 2) * charW else 0f
             val maxChars = max(12, floor((width - 2 * pad - gutter - parallaxRange) / charW).toInt())
-            rows = wrap(maxChars)
+            rows = wrap(lines, maxChars)
             val needed = rows.size * lineH
-            val available = height * 0.88f
+            val available = areaBottom - areaTop
             if (needed <= available) break
             size = max(8 * scaledDensity, size * available / needed)
         }
@@ -110,7 +132,7 @@ class WallRenderer(context: Context) {
             Align.LEFT -> pad
             Align.CENTER -> max(pad, (width - widest) / 2f)
         } + shiftX
-        val top = (height - blockH) * config.verticalPosition.coerceIn(0f, 1f)
+        val top = areaTop + max(0f, areaBottom - areaTop - blockH) * config.verticalPosition.coerceIn(0f, 1f)
         val ascent = -paint.fontMetrics.ascent + (lineH - paint.fontSpacing) / 2f
 
         // Typing reveal.
@@ -171,8 +193,38 @@ class WallRenderer(context: Context) {
         return animating
     }
 
+    /** Draws the footer (e.g. the quote) centered in its own slot, shrinking it to fit. */
+    private fun drawFooter(canvas: Canvas, width: Int, height: Int) {
+        if (footer.isEmpty()) return
+        val top = height * config.footerTop.coerceIn(0f, 1f)
+        val bottom = max(top + height * 0.02f, height * config.footerBottom.coerceIn(0f, 1f))
+        val pad = max(config.horizontalPaddingDp * density, 16 * density)
+        var size = config.fontSizeSp * scaledDensity * 0.85f
+        var rows: List<Row> = emptyList()
+        var lineH = 0f
+        for (attempt in 0 until 4) {
+            paint.textSize = size
+            lineH = paint.fontSpacing * 1.08f
+            val maxChars = max(12, floor((width - 2 * pad) / paint.measureText("M")).toInt())
+            rows = wrap(footer, maxChars, hangingIndent = false)
+            val needed = rows.size * lineH
+            if (needed <= bottom - top) break
+            size = max(8 * scaledDensity, size * (bottom - top) / needed)
+        }
+        val ascent = -paint.fontMetrics.ascent + (lineH - paint.fontSpacing) / 2f
+        var y = top + max(0f, (bottom - top - rows.size * lineH) / 2f)
+        val shiftX = if (config.parallax) (0.5f - parallaxOffset) * 36 * density else 0f
+        for (row in rows) {
+            val text = row.spans.joinToString("") { it.text }.trim()
+            val w = paint.measureText(text)
+            paint.color = row.spans.firstOrNull()?.let { theme.color(it.tok) } ?: theme.comment
+            canvas.drawText(text, (width - w) / 2f + shiftX, y + ascent, paint)
+            y += lineH
+        }
+    }
+
     /** Soft-wraps logical lines into rows of at most [maxChars] characters. */
-    private fun wrap(maxChars: Int): List<Row> {
+    private fun wrap(lines: List<Line>, maxChars: Int, hangingIndent: Boolean = true): List<Row> {
         val rows = ArrayList<Row>()
         lines.forEachIndexed { index, line ->
             if (line.length <= maxChars) {
@@ -180,7 +232,7 @@ class WallRenderer(context: Context) {
                 return@forEachIndexed
             }
             val leading = line.text.takeWhile { it == ' ' }.length
-            val contIndent = min(leading + 4, maxChars / 2)
+            val contIndent = if (hangingIndent) min(leading + 4, maxChars / 2) else 0
             var current = ArrayList<Span>()
             var used = 0
             var number: Int? = index + 1

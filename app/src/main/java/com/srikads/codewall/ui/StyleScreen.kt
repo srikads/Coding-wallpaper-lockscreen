@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.srikads.codewall.core.Align
 import com.srikads.codewall.core.CodeTheme
 import com.srikads.codewall.core.FieldId
+import com.srikads.codewall.core.QuotePlacement
 import com.srikads.codewall.core.WallConfig
 import java.io.File
 
@@ -77,8 +78,44 @@ fun StyleScreen(state: ConfigState, modifier: Modifier) {
             Text("Tip: JetBrains Mono, Fira Code or Cascadia Code look great. The font is copied into private app storage.", style = MaterialTheme.typography.bodySmall)
         }
 
+        Section("screen layout") {
+            Text(
+                "Dashed boxes in the preview show these areas. Switch the preview to \"Lock screen\" to line the code up " +
+                    "between the system clock and the fingerprint icon.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text("Lock screen code area", style = MaterialTheme.typography.labelLarge)
+            RangeRow("From", cfg.lockTop) { v -> state.update { it.copy(lockTop = v.coerceAtMost(it.lockBottom - 0.05f)) } }
+            RangeRow("To", cfg.lockBottom) { v -> state.update { it.copy(lockBottom = v.coerceAtLeast(it.lockTop + 0.05f)) } }
+            Text("Home screen code area", style = MaterialTheme.typography.labelLarge)
+            RangeRow("From", cfg.homeTop) { v -> state.update { it.copy(homeTop = v.coerceAtMost(it.homeBottom - 0.05f)) } }
+            RangeRow("To", cfg.homeBottom) { v -> state.update { it.copy(homeBottom = v.coerceAtLeast(it.homeTop + 0.05f)) } }
+            Text("Quote placement", style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    QuotePlacement.INLINE to "in code",
+                    QuotePlacement.FOOTER_ON_LOCK to "footer on lock",
+                    QuotePlacement.FOOTER_ALWAYS to "footer always",
+                ).forEach { (p, label) ->
+                    FilterChip(selected = cfg.quotePlacement == p, onClick = { state.update { it.copy(quotePlacement = p) } }, label = { Text(label) })
+                }
+            }
+            if (cfg.quotePlacement != QuotePlacement.INLINE) {
+                Text("Footer area (below the fingerprint icon)", style = MaterialTheme.typography.labelLarge)
+                RangeRow("From", cfg.footerTop) { v -> state.update { it.copy(footerTop = v.coerceAtMost(it.footerBottom - 0.02f)) } }
+                RangeRow("To", cfg.footerBottom) { v -> state.update { it.copy(footerBottom = v.coerceAtLeast(it.footerTop + 0.02f)) } }
+            }
+            SwitchRow("Compact objects", cfg.compactObjects, "Put weather, device, … on one wrapped line so more fits") { v -> state.update { it.copy(compactObjects = v) } }
+            TextButton(onClick = {
+                state.update {
+                    val d = WallConfig()
+                    it.copy(homeTop = d.homeTop, homeBottom = d.homeBottom, lockTop = d.lockTop, lockBottom = d.lockBottom, footerTop = d.footerTop, footerBottom = d.footerBottom)
+                }
+            }) { Text("Reset areas (Pixel defaults)") }
+        }
+
         Section("layout") {
-            SliderRow("Vertical position", cfg.verticalPosition, 0f..1f, "${(cfg.verticalPosition * 100).toInt()}%") { v -> state.update { it.copy(verticalPosition = v) } }
+            SliderRow("Position inside area", cfg.verticalPosition, 0f..1f, "${(cfg.verticalPosition * 100).toInt()}%") { v -> state.update { it.copy(verticalPosition = v) } }
             SliderRow("Side padding", cfg.horizontalPaddingDp.toFloat(), 0f..64f, "${cfg.horizontalPaddingDp} dp") { v -> state.update { it.copy(horizontalPaddingDp = v.toInt()) } }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Align.entries.forEach { a ->
@@ -120,6 +157,10 @@ fun StyleScreen(state: ConfigState, modifier: Modifier) {
         }
     }
 }
+
+@Composable
+private fun RangeRow(label: String, value: Float, onChange: (Float) -> Unit) =
+    SliderRow(label, value, 0f..1f, "${(value * 100).toInt()}% of screen") { onChange((it * 100).toInt() / 100f) }
 
 @Composable
 private fun ThemeSwatch(theme: CodeTheme, selected: Boolean, onClick: () -> Unit) {

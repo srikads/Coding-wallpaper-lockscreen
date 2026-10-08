@@ -31,6 +31,9 @@ data class FieldConfig(
 enum class Units { METRIC, IMPERIAL }
 enum class Align { LEFT, CENTER }
 
+/** Where the quote is drawn. FOOTER puts it in its own slot, e.g. below the fingerprint icon. */
+enum class QuotePlacement { INLINE, FOOTER_ON_LOCK, FOOTER_ALWAYS }
+
 data class WallConfig(
     val fields: List<FieldConfig> = defaultFields(),
     val themeId: String = CodeTheme.DRACULA.id,
@@ -38,8 +41,20 @@ data class WallConfig(
     /** Absolute path of a user-imported .ttf/.otf inside app storage, or null for system monospace. */
     val fontPath: String? = null,
     val bold: Boolean = false,
-    /** 0 = top, 0.5 = centered, 1 = bottom of the free space. */
-    val verticalPosition: Float = 0.45f,
+    /** 0 = top, 0.5 = centered, 1 = bottom of the free space inside the code area. */
+    val verticalPosition: Float = 0.5f,
+    /** Code area on the home screen, as fractions of the screen height. */
+    val homeTop: Float = 0.08f,
+    val homeBottom: Float = 0.92f,
+    /** Code area on the lock screen: between the system clock and the fingerprint icon. */
+    val lockTop: Float = 0.30f,
+    val lockBottom: Float = 0.70f,
+    /** Footer slot (used for the quote), e.g. between the fingerprint icon and the shortcuts. */
+    val footerTop: Float = 0.81f,
+    val footerBottom: Float = 0.91f,
+    val quotePlacement: QuotePlacement = QuotePlacement.FOOTER_ON_LOCK,
+    /** Render nested objects (weather, device, …) on a single, wrapped line. */
+    val compactObjects: Boolean = false,
     val horizontalPaddingDp: Int = 20,
     val align: Align = Align.LEFT,
     val lineNumbers: Boolean = true,
@@ -70,6 +85,13 @@ data class WallConfig(
     fun field(id: FieldId): FieldConfig? = fields.firstOrNull { it.id == id }
     fun isEnabled(id: FieldId): Boolean = field(id)?.enabled == true
 
+    /** Whether the quote goes to the footer slot instead of the code (never in template mode). */
+    fun quoteInFooter(locked: Boolean): Boolean = !useTemplate && when (quotePlacement) {
+        QuotePlacement.INLINE -> false
+        QuotePlacement.FOOTER_ON_LOCK -> locked
+        QuotePlacement.FOOTER_ALWAYS -> true
+    }
+
     fun toJson(): JSONObject = JSONObject().apply {
         put("fields", JSONArray().apply {
             fields.forEach {
@@ -81,6 +103,14 @@ data class WallConfig(
         fontPath?.let { put("fontPath", it) }
         put("bold", bold)
         put("vpos", verticalPosition.toDouble())
+        put("homeTop", homeTop.toDouble())
+        put("homeBottom", homeBottom.toDouble())
+        put("lockTop", lockTop.toDouble())
+        put("lockBottom", lockBottom.toDouble())
+        put("footerTop", footerTop.toDouble())
+        put("footerBottom", footerBottom.toDouble())
+        put("quotePlacement", quotePlacement.name)
+        put("compact", compactObjects)
         put("hpad", horizontalPaddingDp)
         put("align", align.name)
         put("lineNumbers", lineNumbers)
@@ -149,6 +179,14 @@ export default today;"""
                     fontPath = o.optString("fontPath").ifBlank { null },
                     bold = o.optBoolean("bold", d.bold),
                     verticalPosition = o.optDouble("vpos", d.verticalPosition.toDouble()).toFloat(),
+                    homeTop = o.optDouble("homeTop", d.homeTop.toDouble()).toFloat(),
+                    homeBottom = o.optDouble("homeBottom", d.homeBottom.toDouble()).toFloat(),
+                    lockTop = o.optDouble("lockTop", d.lockTop.toDouble()).toFloat(),
+                    lockBottom = o.optDouble("lockBottom", d.lockBottom.toDouble()).toFloat(),
+                    footerTop = o.optDouble("footerTop", d.footerTop.toDouble()).toFloat(),
+                    footerBottom = o.optDouble("footerBottom", d.footerBottom.toDouble()).toFloat(),
+                    quotePlacement = enumOr(o.optString("quotePlacement"), d.quotePlacement),
+                    compactObjects = o.optBoolean("compact", d.compactObjects),
                     horizontalPaddingDp = o.optInt("hpad", d.horizontalPaddingDp),
                     align = enumOr(o.optString("align"), d.align),
                     lineNumbers = o.optBoolean("lineNumbers", d.lineNumbers),
